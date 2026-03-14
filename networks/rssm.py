@@ -168,18 +168,7 @@ class RSSM(nnx.Module):
         carry = dict(stoch=stoch,deter=deter,key=new_key)
         feat = dict(stoch=stoch,deter=deter,post_logits=post_logits)
         return carry, feat
-    
-    # def observe(self, carry:Dict, tokens:jax.Array, action:jax.Array, reset:jax.Array):
-    #     feats = dict(stoch=[],deter=[],post_logits=[])
-    #     for i in range(tokens.shape[1]):
-    #         carry,feat = self._observe(carry,tokens[:,i],action[:,i],reset[:,i])
-    #         feats['deter'].append(feat['deter'])
-    #         feats['stoch'].append(feat['stoch'])
-    #         feats['post_logits'].append(feat['post_logits'])
-    #     feats['deter'] = jnp.stack(feats['deter'], axis=1)
-    #     feats['stoch'] = jnp.stack(feats['stoch'], axis=1)
-    #     feats['post_logits'] = jnp.stack(feats['post_logits'], axis=1)
-    #     return carry, feats
+
     
     def observe(self, carry:Dict, tokens:jax.Array, action:jax.Array, reset:jax.Array):
         (tokens, action, reset) = jax.tree.map(lambda x:rearrange(x,'B L ... -> L B ...'),(tokens, action, reset))

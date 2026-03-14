@@ -22,7 +22,11 @@ sg = jax.lax.stop_gradient
 
 def restore_model(model,model_type,ckpt_dir,config,model_name):
     checkpointer = ocp.StandardCheckpointer()
-    abstract_model = nnx.eval_shape(lambda: model_type(**config))
+    def make_abstract():
+        cfg = dict(config)
+        cfg['init_key'] = nnx.Rngs(1)
+        return model_type(**cfg)
+    abstract_model = nnx.eval_shape(make_abstract)
     graphdef, abstract_state = nnx.split(abstract_model)
     state_restored = checkpointer.restore(os.path.join(ckpt_dir,model_name), abstract_state)
     model = nnx.merge(graphdef, state_restored)

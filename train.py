@@ -22,6 +22,9 @@ import hydra
 sg = jax.lax.stop_gradient
 
 def seed_np(seed=20010105):
+    '''
+    设置随机数种子，以确保实验的可重复性。
+    '''
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)

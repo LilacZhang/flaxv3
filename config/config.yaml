@@ -2,21 +2,22 @@ training:
   env_name: Boxing
   num_envs: 1
   seed: 1
-  device: 1
+  device: 0
   total_steps: 102000
   train_ratio: 1024
-  batch_size: 16
-  batch_length: 64
+  batch_size: 8
+  batch_length: 32
   imagine_length: 15
   prioritized: True
   use_datasets: False
 
 eval:
-  device: 1
+  device: 0
   episodes: 100
   num_envs: 1
   env_name: Boxing
-  ckpt_path: /home/zxh/ws/wrqws/flaxv3/outputs/2025-02-21/10-20-47/Boxing/ckpt/100000
+  ckpt_path: /home/lilac/PyProject/flaxv3/outputs/2026-03-14/13-53-37/Boxing/ckpt/100000
+
 
 dreamerv3:
   encoder:
