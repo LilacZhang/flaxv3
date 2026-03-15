@@ -2,7 +2,7 @@
 # ================================================================
 # DreamerV3 Hyperparameter Comparison (Control Variable Method)
 #
-# Games:  Freeway / Breakout / Boxing
+# Games:  Freeway / Boxing
 # Group A: imagine_length  = 5 / 15* / 30
 # Group B: gamma           = 0.99 / 0.997* / 0.999
 # Group C: entropy_coef    = 1e-4 / 3e-4* / 1e-3
@@ -21,7 +21,7 @@ cd "$PROJECT_DIR"
 GAMES=("Freeway" "Boxing")
 SEED=1
 DEVICE=0
-TOTAL_STEPS=100000
+TOTAL_STEPS=50000
 
 # ---- Defaults (baseline) ----
 DEFAULT_IL=15
@@ -29,7 +29,12 @@ DEFAULT_GAMMA=0.997
 DEFAULT_ENT=0.0003
 
 COMPLETED=0
+SKIPPED=0
 TOTAL=14
+
+# ---- Completion tracking ----
+DONE_DIR="$PROJECT_DIR/.experiment_done"
+mkdir -p "$DONE_DIR"
 
 run() {
     local game=$1
@@ -38,6 +43,16 @@ run() {
     local overrides=("$@")
 
     COMPLETED=$((COMPLETED + 1))
+
+    # Check if this experiment was already completed
+    local marker="$DONE_DIR/${game}__${tag}"
+    if [[ -f "$marker" ]]; then
+        SKIPPED=$((SKIPPED + 1))
+        echo ""
+        echo " [$COMPLETED/$TOTAL] $game | $tag  -- SKIPPED (already done)"
+        return 0
+    fi
+
     echo ""
     echo "=========================================="
     echo " [$COMPLETED/$TOTAL] $game | $tag"
@@ -53,6 +68,8 @@ run() {
         training.total_steps=$TOTAL_STEPS \
         "${overrides[@]}"
 
+    # Mark as completed
+    date '+%Y-%m-%d %H:%M:%S' > "$marker"
     echo " -> done in $(( (SECONDS - t) / 60 ))min"
 }
 
@@ -94,5 +111,6 @@ GLOBAL_MINS=$(( (SECONDS - GLOBAL_START) / 60 ))
 echo ""
 echo "=========================================="
 echo " All $TOTAL experiments finished in ${GLOBAL_MINS}min"
+echo " Skipped: $SKIPPED | Ran: $((TOTAL - SKIPPED))"
 echo " SwanLab project: DreamerV3"
 echo "=========================================="

@@ -34,7 +34,7 @@ def seed_np(seed=20010105):
 @hydra.main(config_path='./config',config_name='config')
 def main(config:DictConfig):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(config.training.device)
-    os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+    # os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     outputs_path = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     config.agent.feat_dim = config.dreamerv3.rssm.stoch*config.dreamerv3.rssm.stoch+config.dreamerv3.rssm.deter
     log_path = f'{outputs_path}/{config.training.env_name}'
