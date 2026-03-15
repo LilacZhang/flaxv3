@@ -3,3 +3,4 @@ logdir/
 outputs/
 multirun/
 .vscode/
+.experiment_done/*
