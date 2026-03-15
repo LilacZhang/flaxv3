@@ -30,3 +30,8 @@ python eval.py eval.env_name=[env_name] eval.ckpt_path=[checkpoints] eval.device
 ```
 
 Make sure to replace `[checkpoints]` with the path to the checkpoint file.
+
+
+## Experiments
+
+Add comparison with different nets architectures in several atari games. The results will be added in the future.

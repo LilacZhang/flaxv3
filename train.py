@@ -18,6 +18,8 @@ from utils.env_wrappers import build_single_env,build_vec_env
 from utils.replaybuffer import Replaybuffer, Datasets
 from utils.optim import make_simple_opt
 import hydra
+import swanlab
+from omegaconf import OmegaConf
 
 sg = jax.lax.stop_gradient
 
@@ -32,8 +34,7 @@ def seed_np(seed=20010105):
 @hydra.main(config_path='./config',config_name='config')
 def main(config:DictConfig):
     os.environ['CUDA_VISIBLE_DEVICES'] = str(config.training.device)
-    # os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
-    os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION']= '0.3'
+    os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
     outputs_path = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     config.agent.feat_dim = config.dreamerv3.rssm.stoch*config.dreamerv3.rssm.stoch+config.dreamerv3.rssm.deter
     log_path = f'{outputs_path}/{config.training.env_name}'
@@ -61,6 +62,17 @@ def main(config:DictConfig):
     else:
         rplb = Replaybuffer(obs_space,int(1E5),config.training.num_envs,action_space,1024,config.training.batch_length)
     logger = Logger(log_path)
+
+    exp_name = (f"{config.training.env_name}"
+                f"_IL{config.training.imagine_length}"
+                f"_g{config.agent.gamma}"
+                f"_ent{config.agent.entropy_coef}"
+                f"_seed{config.training.seed}")
+    swanlab.init(
+        project="DreamerV3",
+        experiment_name=exp_name,
+        config=OmegaConf.to_container(config, resolve=True),
+    )
     
     obs, _ = env.reset()
     carry = dreamerv3.init_carry(config.training.num_envs, init_key.noise())
@@ -115,8 +127,12 @@ def main(config:DictConfig):
                     video = np.clip(video,0,255)
                     video = video.astype(np.uint8)
                     os.makedirs(f'{video_path}/{epoch}',exist_ok=True)
+                    swanlab_videos = []
                     for i in range(16):
-                        imageio.mimsave(f'{video_path}/{epoch}/{i}.gif',video[i],fps=20)  
+                        gif_path = f'{video_path}/{epoch}/{i}.gif'
+                        imageio.mimsave(gif_path,video[i],fps=20)
+                        swanlab_videos.append(swanlab.Image(video[i][0]))
+                    swanlab.log({"Imagine/video": swanlab_videos})
 
                 #save models
                 if epoch%10000 == 0:
@@ -126,6 +142,8 @@ def main(config:DictConfig):
                 carry['key'] = train_carry['key'] 
 
             pbar.update(1)
-            
+
+    swanlab.finish()
+
 if __name__ == '__main__':
     main()

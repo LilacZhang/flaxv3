@@ -1,29 +1,20 @@
 from typing import Dict
 
-import tensorboard
-from tensorboardX import SummaryWriter
-import gymnasium as gym
-from einops import rearrange
-import imageio
+import numpy as np
+import swanlab
 
 class Logger:
-    def __init__(self,log_path:str):
-        self.writer = SummaryWriter(log_path)
-        self.step = {}
-    
-    def log_dict(self,metrics:Dict):
-        for key in metrics:
-            if key not in self.step:
-                self.step[key]=0
+    def __init__(self, log_path: str):
+        self.log_path = log_path
+
+    def log_dict(self, metrics: Dict):
+        logged = {}
+        for key, value in metrics.items():
+            if isinstance(value, np.ndarray) and value.ndim >= 3:
+                logged[key] = swanlab.Image(value)
             else:
-                self.step[key]+=1
-            
-            # if 'Image' in key:
-            #     self.writer.add_image(key,metrics[key],self.step[key])
-            if 'video' in key:
-                self.writer.add_video(key,metrics[key],self.step[key],fps=15)
-            else:
-                self.writer.add_scalar(key,metrics[key],self.step[key])
+                logged[key] = float(value)
+        swanlab.log(logged)
 
 if __name__ == '__main__':
     # import numpy as np

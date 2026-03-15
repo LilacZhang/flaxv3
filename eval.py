@@ -13,10 +13,11 @@ import pandas as pd
 
 from networks.dreamerv3 import Dreamerv3
 from networks.agent import ActorCritic
-from utils.utils import Logger
 from utils.env_wrappers import build_eval_env,build_eval_vec_env
 import hydra
 import orbax.checkpoint as ocp
+import swanlab
+from omegaconf import OmegaConf
 
 sg = jax.lax.stop_gradient
 
@@ -44,6 +45,12 @@ def main(config:DictConfig):
     action_space = Space(np.uint8,(),0,dumy_env.action_space.n)
     
     env = build_eval_vec_env(env_name=config.eval.env_name,num_envs=config.eval.num_envs,image_size=(64,64))
+
+    swanlab.init(
+        project="DreamerV3-Eval",
+        config=OmegaConf.to_container(config, resolve=True),
+    )
+
     init_key = nnx.Rngs(config.training.seed)
     agent_config = dict(**config.agent,action_space=action_space,init_key=init_key)
     dreamerv3_config = dict(enc_cfg=getattr(config,'dreamerv3').encoder,
@@ -95,7 +102,11 @@ def main(config:DictConfig):
                 for i in range(config.eval.num_envs):
                     if done_flags[i]:
                         episodes += 1
-                        episodes_return.append(sum_rewards[i])  
+                        episodes_return.append(sum_rewards[i])
+                        swanlab.log({
+                            "Eval/episode_return": sum_rewards[i],
+                            "Eval/episode": episodes,
+                        })
                         pbar.set_postfix({'episode':episodes,'return':sum_rewards[i]})
                         pbar.update(1)
                         sum_rewards[i] = 0
@@ -106,10 +117,17 @@ def main(config:DictConfig):
             if episodes == config.eval.episodes:
                 break
     
-    print('Everage Return:', sum(episodes_return)/config.eval.episodes)
+    avg_return = sum(episodes_return)/config.eval.episodes
+    print('Everage Return:', avg_return)
     print('EveryEpisode:', episodes_return)
-    
-    csv = {'Checkpoint':[100000],'Everage':[sum(episodes_return)/config.eval.episodes]}
+
+    swanlab.log({
+        "Eval/average_return": avg_return,
+        "Eval/total_episodes": config.eval.episodes,
+    })
+    swanlab.finish()
+
+    csv = {'Checkpoint':[100000],'Everage':[avg_return]}
     csv = pd.DataFrame(csv)
     csv.to_csv('test.csv',index=False)
     
