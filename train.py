@@ -14,7 +14,7 @@ import imageio
 from networks.dreamerv3 import Dreamerv3
 from networks.agent import ActorCritic
 from utils.utils import Logger
-from utils.env_wrappers import build_single_env,build_vec_env
+from utils.env_wrappers import build_single_env_unified, build_env
 from utils.replaybuffer import Replaybuffer, Datasets
 from utils.optim import make_simple_opt
 import hydra
@@ -44,17 +44,50 @@ def main(config:DictConfig):
     os.makedirs(save_path,exist_ok=True)
     
     seed_np(config.training.seed)
-    dumy_env = build_single_env(config.training.env_name,(64,64),config.training.seed)
-    action_space = Space(np.uint8,(),0,dumy_env.action_space.n)
-    obs_space = {'image':Space(np.uint8,dumy_env.observation_space.shape,low=0,high=255)}
-    
-    env = build_vec_env(env_name=config.training.env_name,num_envs=config.training.num_envs,image_size=(64,64),seed=config.training.seed)
+    env_type = getattr(config.training, 'env_type', 'atari')
+    obs_type = getattr(config.training, 'obs_type', 'image')
+    is_atari = (env_type == 'atari')
+
+    dumy_env = build_single_env_unified(config.training.env_name, env_type, obs_type, (64,64), config.training.seed)
+    if is_atari:
+        action_space = Space(np.uint8, (), 0, dumy_env.action_space.n)
+        obs_space = {'image': Space(np.uint8, dumy_env.observation_space.shape, low=0, high=255)}
+    else:
+        act_dim = dumy_env.action_space.shape[0]
+        action_space = Space(np.float32, (act_dim,), -1.0, 1.0)
+        if obs_type == 'state':
+            state_dim = dumy_env.observation_space.shape[0]
+            obs_space = {'state': Space(np.float32, (state_dim,), low=-np.inf, high=np.inf)}
+        else:
+            obs_space = {'image': Space(np.uint8, dumy_env.observation_space.shape, low=0, high=255)}
+    dumy_env.close()
+
+    env = build_env(env_name=config.training.env_name, env_type=env_type, obs_type=obs_type,
+                    image_size=(64,64), num_envs=config.training.num_envs, seed=config.training.seed)
     init_key = nnx.Rngs(config.training.seed)
-    agent = ActorCritic(**config.agent,action_space=action_space,init_key=init_key)
+
+    # Build state encoder config if needed
+    state_enc_cfg = None
+    state_dec_cfg = None
+    if obs_type == 'state':
+        state_enc_cfg = getattr(config.dreamerv3, 'state_encoder')
+        state_dec_cfg = getattr(config.dreamerv3, 'state_decoder')
+        # Auto-detect state_dim from env
+        state_dim = obs_space['state'].shape[0]
+        if state_enc_cfg.state_dim == 0:
+            state_enc_cfg.state_dim = state_dim
+        if state_dec_cfg.state_dim == 0:
+            state_dec_cfg.state_dim = state_dim
+        obs_key = 'state'
+    else:
+        obs_key = 'image'
+
+    agent = ActorCritic(**config.agent, action_space=action_space, init_key=init_key)
     dreamerv3 = Dreamerv3(enc_cfg=getattr(config,'dreamerv3').encoder,
                           seq_cfg=getattr(config,'dreamerv3').rssm,
                           dec_cfg=getattr(config,'dreamerv3').decoder,
-                          action_space=action_space,init_key=init_key)
+                          action_space=action_space, init_key=init_key,
+                          obs_type=obs_type, state_enc_cfg=state_enc_cfg, state_dec_cfg=state_dec_cfg)
     agent_opt = nnx.Optimizer(agent, make_simple_opt(lr=3e-5,grad_norm=100.))
     dreamerv3_opt = nnx.Optimizer(dreamerv3, make_simple_opt(lr=1e-4,grad_norm=1000.))
     if config.training.use_datasets:
@@ -88,17 +121,23 @@ def main(config:DictConfig):
             else:
                 action = env.action_space.sample()
             next_obs, reward, termination, truncated, info = env.step(action)
-            reset = np.logical_or(termination, info["life_loss"])
-            step = {'obs':{'image':obs},'action':action,'reward':reward,'termination':reset}
+            if is_atari:
+                reset = np.logical_or(termination, info["life_loss"])
+            else:
+                reset = termination
+            step = {'obs':{obs_key:obs},'action':action,'reward':reward,'termination':reset}
             rplb.add(step)
-            
+
             done_flags = np.logical_or(termination,truncated)
             if done_flags.any():
                 for i in range(config.training.num_envs):
                     if done_flags[i]:
                         episodes += 1
-                        env_metrics = {f'Env/episode_return':sum_rewards[i],
-                                       f'Env/episode_length':current_info['episode_frame_number'][i]//4}
+                        env_metrics = {f'Env/episode_return':sum_rewards[i]}
+                        if is_atari and 'episode_frame_number' in info:
+                            env_metrics[f'Env/episode_length'] = current_info['episode_frame_number'][i]//4
+                        elif 'episode_step_count' in info:
+                            env_metrics[f'Env/episode_length'] = info['episode_step_count'][i]
                         logger.log_dict(env_metrics)
                         pbar.set_postfix({'episode':episodes,'return':sum_rewards[i]})
                         sum_rewards[i] = 0
@@ -110,7 +149,7 @@ def main(config:DictConfig):
             if epoch*config.training.train_ratio%(config.training.batch_length*config.training.batch_size)==0 and rplb.ready:
                 training_metrics = {}
                 batch = rplb.sample(config.training.batch_size,config.training.prioritized)
-                sample_obs = batch['obs']['image']
+                sample_obs = batch['obs'][obs_key]
                 wm_loss, wm_metrics, train_carry = dreamerv3.update(dreamerv3_opt,sample_obs,batch['action'],batch['reward'],
                                                                batch['termination'],carry['key'])
                 train_carry, pred_actions, train_feats, pred_rews, pred_ters = \
@@ -119,8 +158,8 @@ def main(config:DictConfig):
                 training_metrics.update(wm_metrics)
                 training_metrics.update(ac_metrics)
                 logger.log_dict(training_metrics)
-                #imagine video
-                if epoch%5000 == 0:
+                #imagine video (only for image obs)
+                if epoch%5000 == 0 and obs_type == 'image':
                     slide_length = train_feats.shape[0]//16
                     pred_video = sg(dreamerv3.dec(train_feats[::slide_length]))
                     video = np.asarray(pred_video)*255.

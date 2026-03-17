@@ -1,5 +1,7 @@
 training:
   env_name: Boxing
+  env_type: atari          # 'atari' or 'mujoco_playground'
+  obs_type: image          # 'image' or 'state'
   num_envs: 2
   seed: 1
   device: 0
@@ -16,6 +18,8 @@ eval:
   episodes: 100
   num_envs: 1
   env_name: Boxing
+  env_type: atari
+  obs_type: image
   ckpt_path: /home/lilac/PyProject/flaxv3/outputs/2026-03-14/13-53-37/Boxing/ckpt/100000
 
 
@@ -26,7 +30,7 @@ dreamerv3:
     mults: [1,2,4,8]
     act: silu
     norm: BatchNorm
-  
+
   rssm:
     hidden: 512
     layers: 1
@@ -44,10 +48,24 @@ dreamerv3:
     act: silu
     norm: BatchNorm
 
+  state_encoder:
+    state_dim: 0           # auto-detected from env, 0 = auto
+    hidden: 512
+    layers: 3
+    act: silu
+    norm: LayerNorm
+
+  state_decoder:
+    state_dim: 0
+    hidden: 512
+    layers: 3
+    act: silu
+    norm: LayerNorm
+
 agent:
   feat_dim: 1536
-  hidden_dim: 512 
-  layers: 2 
+  hidden_dim: 512
+  layers: 2
   gamma: 0.997
   lmbda: 0.95
   entropy_coef: 0.0003

@@ -109,3 +109,42 @@ if __name__ == "__main__":
     # print(vec_env.observation_space.dtype)
     # print(vec_env.action_space.dtype)
     pass
+
+
+def build_env(env_name, env_type='atari', obs_type='image', image_size=(64, 64), num_envs=1, seed=0):
+    """Unified environment builder dispatching on env_type."""
+    if env_type == 'atari':
+        return build_vec_env(env_name, image_size, num_envs, seed)
+    elif env_type == 'mujoco_playground':
+        from utils.mujoco_wrapper import build_mujoco_vec_env
+        return build_mujoco_vec_env(env_name, obs_type, image_size, num_envs, seed)
+    else:
+        raise ValueError(f"Unknown env_type: {env_type}")
+
+
+def build_single_env_unified(env_name, env_type='atari', obs_type='image', image_size=(64, 64), seed=0):
+    """Unified single env builder dispatching on env_type."""
+    if env_type == 'atari':
+        return build_single_env(env_name, image_size, seed)
+    elif env_type == 'mujoco_playground':
+        from utils.mujoco_wrapper import build_mujoco_env
+        return build_mujoco_env(env_name, obs_type, image_size, seed)
+    else:
+        raise ValueError(f"Unknown env_type: {env_type}")
+
+
+def build_eval_env_unified(env_name, env_type='atari', obs_type='image', image_size=(64, 64), num_envs=1, seed=0):
+    """Unified eval env builder dispatching on env_type."""
+    if env_type == 'atari':
+        if num_envs > 1:
+            return build_eval_vec_env(env_name, image_size, num_envs)
+        else:
+            return build_eval_env(env_name, image_size)
+    elif env_type == 'mujoco_playground':
+        from utils.mujoco_wrapper import build_mujoco_eval_vec_env, build_mujoco_eval_env
+        if num_envs > 1:
+            return build_mujoco_eval_vec_env(env_name, obs_type, image_size, num_envs, seed)
+        else:
+            return build_mujoco_eval_env(env_name, obs_type, image_size, seed)
+    else:
+        raise ValueError(f"Unknown env_type: {env_type}")

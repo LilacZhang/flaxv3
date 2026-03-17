@@ -38,6 +38,29 @@ def get_unimix_logits(logits:jax.Array, unimix:float=0.01):
     probs = (1 - unimix)*probs + unimix*uniform
     return jnp.log(probs)
 
+class StateEncoder(nnx.Module):
+    """MLP encoder for state vector observations (replaces CNN Encoder for state obs)."""
+    def __init__(self, state_dim:int, hidden:int, layers:int, token_dim:int, act:str, norm:str, init_key:nnx.Rngs):
+        super().__init__()
+        self.final_shape = [token_dim]
+        features = [state_dim] + [hidden]*(layers-1) + [token_dim]
+        linear_modules = []
+        norm_modules = []
+        for in_f, out_f in zip(features[:-1], features[1:]):
+            linear_modules.append(nnx.Linear(in_f, out_f, rngs=init_key))
+            norm_modules.append(getattr(nnx, norm)(out_f, rngs=init_key))
+        self.linear_modules = linear_modules
+        self.norm_modules = norm_modules
+        self.act = getattr(nnx, act)
+
+    def __call__(self, x:jax.Array):
+        x = jax.device_put(x)
+        x = x.astype(jnp.float32)
+        for linear, norm in zip(self.linear_modules, self.norm_modules):
+            x = self.act(norm(linear(x)))
+        return x
+
+
 class Encoder(nnx.Module):
     def __init__(self,image_shape:tuple,depths:int,mults:tuple,act:str,norm:str,init_key:nnx.Rngs):
         super().__init__()

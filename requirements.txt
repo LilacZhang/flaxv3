@@ -6,11 +6,11 @@ elements
 google-resumable-media
 granular
 ipdb
-jax[cuda12]
+# jax[cuda12]
 jaxtyping
 ninjax
 numpy
-nvidia-cuda-nvcc-cu12>=12.8
+# nvidia-cuda-nvcc-cu12>=12.8
 portal
 scope
 tqdm
@@ -23,3 +23,7 @@ opencv-python
 gymnasium[atari,accept-rom-license]
 hydra-core
 pandas
+swanlab
+mujoco
+mujoco-mjx
+playground

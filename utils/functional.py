@@ -240,7 +240,14 @@ def ImageMSE(pred:jax.Array, target:jax.Array):
   loss = (pred-target)**2
   loss = reduce(loss, 'B L H W C -> B L','sum')
   # loss = jnp.sum(loss,axis=[-1,-2,-3])
-  return loss.mean()    
+  return loss.mean()
+
+def StateMSE(pred:jax.Array, target:jax.Array):
+  target = jax.device_put(target)
+  target = sg(target.astype(jnp.float32))
+  loss = (pred-target)**2
+  loss = jnp.sum(loss, axis=-1)  # sum over state_dim: (B, L)
+  return loss.mean()
 
         
 if __name__ == '__main__':
